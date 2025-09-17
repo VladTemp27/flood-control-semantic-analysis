@@ -5,20 +5,10 @@ import sys
 from instagrapi import Client
 from instagrapi.exceptions import LoginRequired, PleaseWaitFewMinutes, ChallengeRequired
 
-SESSION_FILE = 'session.json'
+"""Set credentials first: INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD as environment variables"""
 
-def delete_session():
-    """Delete existing session file to force fresh login"""
-    if os.path.exists(SESSION_FILE):
-        os.remove(SESSION_FILE)
-        print(f"✅ Deleted old session file: {SESSION_FILE}")
-        return True
-    else:
-        print("ℹ️ No session file found to delete")
-        return False
-
-def setup_client(force_fresh_login=False):
-    """Initialize and login to Instagram with better session handling"""
+def setup_client():
+    """Initialize and login to Instagram (no session persistence)"""
     cl = Client()
     
     # Configure client settings to avoid detection
@@ -38,31 +28,12 @@ def setup_client(force_fresh_login=False):
         print("Please set INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD environment variables")
         return None
     
-    # Delete session if force fresh login is requested
-    if force_fresh_login:
-        delete_session()
-    
     try:
-        # Try to load existing session first (unless forcing fresh login)
-        if not force_fresh_login and os.path.exists(SESSION_FILE):
-            print("Loading existing session...")
-            cl.load_settings(SESSION_FILE)
-            
-            # Try to verify session without full login
-            try:
-                cl.get_timeline_feed()  # Test if session is still valid
-                print("Session is still valid!")
-                return cl
-            except Exception:
-                print("Session expired, deleting and attempting fresh login...")
-                delete_session()  # Auto-delete corrupt session
-        
-        print("Attempting fresh login...")
+        print("Attempting fresh login (no session persistence)...")
         # Fresh login with more realistic behavior
         time.sleep(2)  # Wait before login attempt
         cl.login(username, password)
-        cl.dump_settings(SESSION_FILE)
-        print("Successfully logged in and saved session")
+        print("Successfully logged in!")
         
         return cl
         
@@ -73,18 +44,11 @@ def setup_client(force_fresh_login=False):
         print("2. Log into Instagram manually through browser/app first")
         print("3. Complete any security challenges Instagram shows you")
         print("4. Use a VPN or different IP address")
-        print("5. Run script with force_fresh_login=True")
-        
-        # Auto-delete potentially problematic session
-        delete_session()
         return None
         
     except Exception as e:
         error_msg = str(e)
         print(f"Login failed: {error_msg}")
-        
-        # Auto-delete session on any login failure
-        delete_session()
         
         if any(keyword in error_msg.lower() for keyword in ["blacklist", "ip", "blocked", "suspicious"]):
             print("\n🚫 IP BLOCKED SOLUTIONS:")
@@ -93,7 +57,6 @@ def setup_client(force_fresh_login=False):
             print("3. Try from a different network (mobile hotspot)")
             print("4. Set INSTAGRAM_PROXY environment variable")
             print("5. Try logging in manually through Instagram app/website first")
-            print("6. Run script with force_fresh_login=True")
         
         return None
 
@@ -129,25 +92,33 @@ def scrape_comments(cl, media_id, max_comments=500):
         return []
 
 def save_to_csv(comments, filename='instagram_comments.csv'):
-    """Save comments to CSV file"""
+    """Save comments to CSV file in the instagram-scraper folder"""
     if not comments:
         print("No comments to save")
         return
     
-    with open(filename, 'w', newline='', encoding='utf-8') as file:
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    full_path = os.path.join(script_dir, filename)
+    
+    with open(full_path, 'w', newline='', encoding='utf-8') as file:
         fieldnames = ['comment_id', 'username', 'text', 'created_at_utc', 'like_count']
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         
         writer.writeheader()
         writer.writerows(comments)
     
-    print(f"Saved {len(comments)} comments to {filename}")
+    print(f"Saved {len(comments)} comments to {full_path}")
 
 def main():
-    # Check for command line arguments
-    force_fresh = "--fresh" in sys.argv or "--delete-session" in sys.argv
-    if force_fresh:
-        print("🔄 Force fresh login requested")
+    # Check for command line arguments (removing session-related ones)
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print("Usage: python scraper.py")
+        print("Environment variables needed:")
+        print("  INSTAGRAM_USERNAME - Your Instagram username")
+        print("  INSTAGRAM_PASSWORD - Your Instagram password")
+        print("  INSTAGRAM_PROXY - Optional proxy (http://user:pass@host:port)")
+        return
     
     # Instagram post URLs to scrape
     urls = [
@@ -165,11 +136,9 @@ def main():
     ]
     
     # Initialize client
-    cl = setup_client(force_fresh_login=force_fresh)
+    cl = setup_client()
     if not cl:
         print("Failed to setup Instagram client")
-        print("\n💡 TIP: Try running with --fresh flag to delete old session:")
-        print("python scraper.py --fresh")
         return
     
     all_comments = []
