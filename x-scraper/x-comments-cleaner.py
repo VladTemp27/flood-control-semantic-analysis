@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Load the CSV file (skip the first 3 metadata rows)
-file_path = "/Users/domingolenar/Downloads/flood-control-semantic-analysis/x-scraper/MergedXComments.csv"
+file_path = "./MergedXComments.csv"
 df = pd.read_csv(file_path, skiprows=3)
 
 # Keep only the relevant columns
